@@ -488,6 +488,14 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 			memberCluster4CentralProd,
 			memberCluster6WestProd,
 		}
+
+		// 1East and 4Central are in wantBoundClusters1, so they are bound before the property
+		// selector changes; 6West is still scheduled when it is dropped.
+		previousStateByCluster := map[string]placementv1beta1.BindingState{
+			memberCluster1EastProd:    placementv1beta1.BindingStateBound,
+			memberCluster4CentralProd: placementv1beta1.BindingStateBound,
+			memberCluster6WestProd:    placementv1beta1.BindingStateScheduled,
+		}
 		wantIgnoredClusters2 := []string{
 			memberCluster8UnhealthyEastProd,
 			memberCluster9LeftCentralProd,
@@ -619,7 +627,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 		})
 
 		It("should mark bindings as unscheduled for clusters that were unselected", func() {
-			unscheduledBindingsUpdatedActual := unscheduledBindingsCreatedOrUpdatedForClustersActual(wantUnscheduledClusters2, zeroScoreByCluster, crpKey, policySnapshotName1)
+			unscheduledBindingsUpdatedActual := unscheduledBindingsCreatedOrUpdatedForClustersActual(wantUnscheduledClusters2, zeroScoreByCluster, previousStateByCluster, crpKey, policySnapshotName1)
 			Eventually(unscheduledBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(unscheduledBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
@@ -2114,6 +2122,14 @@ var _ = Describe("scheduling RPs of the PickAll placement type using cluster pro
 			memberCluster4CentralProd,
 			memberCluster6WestProd,
 		}
+
+		// 1East and 4Central are in wantBoundClusters1, so they are bound before the property
+		// selector changes; 6West is still scheduled when it is dropped.
+		previousStateByCluster := map[string]placementv1beta1.BindingState{
+			memberCluster1EastProd:    placementv1beta1.BindingStateBound,
+			memberCluster4CentralProd: placementv1beta1.BindingStateBound,
+			memberCluster6WestProd:    placementv1beta1.BindingStateScheduled,
+		}
 		wantIgnoredClusters2 := []string{
 			memberCluster8UnhealthyEastProd,
 			memberCluster9LeftCentralProd,
@@ -2245,7 +2261,7 @@ var _ = Describe("scheduling RPs of the PickAll placement type using cluster pro
 		})
 
 		It("should mark bindings as unscheduled for clusters that were unselected", func() {
-			unscheduledBindingsUpdatedActual := unscheduledBindingsCreatedOrUpdatedForClustersActual(wantUnscheduledClusters2, zeroScoreByCluster, rpKey, policySnapshotName1)
+			unscheduledBindingsUpdatedActual := unscheduledBindingsCreatedOrUpdatedForClustersActual(wantUnscheduledClusters2, zeroScoreByCluster, previousStateByCluster, rpKey, policySnapshotName1)
 			Eventually(unscheduledBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(unscheduledBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})

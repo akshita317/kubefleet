@@ -269,7 +269,13 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 	}
 }
 
-func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey types.NamespacedName, policySnapshotName string) func() error {
+// unscheduledBindingsCreatedOrUpdatedForClustersActual checks that the bindings for the given
+// clusters have been marked as unscheduled.
+//
+// previousStateByCluster declares the state each binding held before it was unscheduled; the
+// scheduler records that state in the previous-binding-state annotation, so callers must supply
+// it for every cluster to have the annotation verified.
+func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, previousStateByCluster map[string]placementv1beta1.BindingState, placementKey types.NamespacedName, policySnapshotName string) func() error {
 	return func() error {
 		bindingList, err := listBindings(placementKey)
 		if err != nil {
@@ -286,16 +292,22 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 				unscheduled = append(unscheduled, binding)
 			}
 		}
-		// TODO (rzhang): fix me, compare the annotations when we know its previous state
 		wantUnscheduled := []placementv1beta1.BindingObj{}
 		if placementKey.Namespace == "" {
 			for _, name := range clusters {
 				score := scoreByCluster[name]
+				previousState, ok := previousStateByCluster[name]
+				if !ok {
+					return fmt.Errorf("no previous binding state declared for cluster %s; the caller must declare it so that the %s annotation can be verified", name, placementv1beta1.PreviousBindingStateAnnotation)
+				}
 				binding := &placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingNamePlaceholder,
 						Labels: map[string]string{
 							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.PreviousBindingStateAnnotation: string(previousState),
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -315,12 +327,19 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 		} else {
 			for _, name := range clusters {
 				score := scoreByCluster[name]
+				previousState, ok := previousStateByCluster[name]
+				if !ok {
+					return fmt.Errorf("no previous binding state declared for cluster %s; the caller must declare it so that the %s annotation can be verified", name, placementv1beta1.PreviousBindingStateAnnotation)
+				}
 				binding := &placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      bindingNamePlaceholder,
 						Namespace: placementKey.Namespace,
 						Labels: map[string]string{
 							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.PreviousBindingStateAnnotation: string(previousState),
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -339,7 +358,7 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 			}
 		}
 
-		if diff := cmp.Diff(unscheduled, wantUnscheduled, ignoreResourceBindingFields...); diff != "" {
+		if diff := cmp.Diff(unscheduled, wantUnscheduled, ignoreResourceBindingFieldsKeepAnnotations...); diff != "" {
 			return fmt.Errorf("unscheduled bindings are not updated as expected; diff (-got, +want): %s", diff)
 		}
 
